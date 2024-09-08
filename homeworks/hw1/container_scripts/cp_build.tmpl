@@ -1,0 +1,60 @@
+#!/bin/bash
+
+# This performs the CP-specific build. It may be replaced with a script
+# or binary for a different interpreter. The name MUST NOT change.
+
+set -e
+set -o pipefail
+
+# set parallel value
+: "${NPROC_VAL:=$(nproc)}"
+
+warn() {
+    echo "$*" >&2
+}
+
+die() {
+    warn "$*"
+    exit 1
+}
+
+# save environment vars
+_save_CFLAGS=${CFLAGS}
+_save_LDFLAGS=${LDFLAGS}
+_save_LIBS=${LIBS}
+
+# clean up old built harness 
+rm -f "${OUT}/filein_harness"
+rm -f "${SRC}/samples/mock_vp"
+
+# Build mock-cp-src
+: "${CP_BASE_CFLAGS:=-w}"
+: "${CP_BASE_LDFLAGS:=}"
+: "${CP_BASE_LIBS:=}"
+
+export CFLAGS="${CP_BASE_CFLAGS} ${CP_BASE_EXTRA_CFLAGS}"
+export LDFLAGS="${CP_BASE_LDFLAGS} ${CP_BASE_EXTRA_LDFLAGS}"
+export LIBS="${CP_BASE_LIBS} ${CP_BASE_EXTRA_LIBS}"
+
+${CP_BASE_BUILD_PREFIX} make -C "${SRC}/samples" -j${NPROC_VAL} ${CP_BASE_BUILD_SUFFIX} \
+    || die "Failed to build mock-cp-src"
+
+# Build harness
+: "${CP_HARNESS_CFLAGS:=-w -fsanitize=address -fsanitize=undefined -fsanitize=fuzzer}"
+: "${CP_HARNESS_LDFLAGS:=-I ${LIB_FUZZING_ENGINE}}"
+: "${CP_HARNESS_LIBS:=}"
+
+export CFLAGS="${CP_HARNESS_CFLAGS} ${CP_HARNESS_EXTRA_CFLAGS}"
+export LDFLAGS="${CP_HARNESS_LDFLAGS} ${CP_HARNESS_EXTRA_LDFLAGS}"
+export LIBS="${CP_HARNESS_LIBS} ${CP_HARNESS_EXTRA_LIBS}"
+
+${CP_HARNESS_BUILD_PREFIX} make -C "${SRC}/test" -j${NPROC_VAL} ${CP_HARNESS_BUILD_SUFFIX} \
+    || die "Failed to build harness"
+
+# restore vars
+export CFLAGS=${_save_CFLAGS}
+export LDFLAGS=${_save_LDFLAGS}
+export LIBS=${_save_LDFLAGS}
+
+cp -f ${SRC}/test/filein_harness ${OUT} || die "Failed to copy built harness"
+

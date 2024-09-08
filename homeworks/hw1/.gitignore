@@ -1,0 +1,10 @@
+out/
+work/
+src/.pulled*
+container_scripts/*.gen
+
+# add CP-specific sources to gitignore list
+src/samples
+.env
+x.bin
+x.diff

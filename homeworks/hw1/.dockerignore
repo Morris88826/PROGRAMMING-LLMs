@@ -1,0 +1,15 @@
+.env*
+.git/
+.github/
+.git*
+.internal_only/
+src/
+work/
+out/
+exemplar_only/
+includes/
+*.md
+LICENSE
+Makefile
+project.yaml
+run.sh

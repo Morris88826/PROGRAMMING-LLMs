@@ -1,0 +1,26 @@
+#!/bin/bash
+
+# This performs the CP-specific tests. It may be replaced with a script
+# or binary for a different interpreter. The name MUST NOT change.
+
+set -e
+set -o pipefail
+
+warn() {
+    echo "$*" >&2
+}
+
+die() {
+    warn "$*"
+    exit 1
+}
+
+[[ -x ${SRC}/samples/mock_vp ]] || die "FAILURE: missing binary: ${SRC}/samples/mock_vp"
+[[ -f ${SRC}/test/test1.blob ]] || die "FAILURE: missing test file: ${SRC}/test/test1.blob"
+[[ -f ${SRC}/test/test2.blob ]] || die "FAILURE: missing test file: ${SRC}/test/test2.blob"
+
+${SRC}/samples/mock_vp < ${SRC}/test/test1.blob | grep -q "apple" || \
+    { warn "FAILURE: test1 failed"; exit 2; }
+
+${SRC}/samples/mock_vp < ${SRC}/test/test2.blob | grep -q "bicycle" || \
+    { warn "FAILURE: test2 failed"; exit 2; }
