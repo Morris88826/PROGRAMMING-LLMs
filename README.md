@@ -1,1 +1,1 @@
-CSCE 689 - Special Topics in Programming Large Language Models
+# CSCE 689 - Special Topics in Programming Large Language Models
