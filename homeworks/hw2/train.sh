@@ -1,0 +1,5 @@
+python train_gpt2.py --input_bin "dev/data/fineweb10B/fineweb_train_*.bin" --input_val_bin "dev/data/fineweb10B/fineweb_val_*.bin" --output_dir log124M --model "d12" --batch_size 8 --sequence_length 2048 --total_batch_size 524288 --zero_stage 1  --weight_decay 0.1 --learning_rate 0.0006 --learning_rate_decay_frac 0.0 --warmup_iters 700 --val_loss_every 250 --sample_every 20000 --compile 1 --tensorcores 1 --dtype bfloat16
+
+
+
+python train_gpt2.py --input_bin "dev/data/fineweb10B/fineweb_train_*.bin" --input_val_bin "dev/data/fineweb10B/fineweb_val_*.bin" --output_dir log124M_v2 --model "d12" --save_every 2500 --batch_size 16 --sequence_length 1024 --total_batch_size 524288 --num_iterations 76294 --learning_rate 0.0012 --warmup_iters 715 --learning_rate_decay_frac 0.1 --weight_decay 0.01 --val_loss_every 250 --val_max_steps 20 --overfit_single_batch 0 --tensorcores 1 --compile 1 --flash 1 --dtype bfloat16 --norm_method rmsnorm --act_layer swiglu

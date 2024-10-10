@@ -1,0 +1,49 @@
+# config.yaml
+name: &addr "gpt2-124M"  # name of the experiment
+
+# File system input/output settings
+input_bin: "dev/data/tinyshakespeare/tiny_shakespeare_val.bin"
+input_val_bin: ""
+output_dir: "./results/addr_*{addr}"  # Correct usage of alias
+
+# Model configuration
+model: "gpt2"  # options: gpt2 | gpt2-medium | gpt2-large | gpt2-xl | d12 | d24 | d36 | d48
+
+save_every: 250 # save the model every this many iterations
+
+# Training settings
+batch_size: 4
+sequence_length: 64
+total_batch_size: 256
+num_iterations: 10
+inference_only: 0  # 0 for training, 1 for inference only
+
+# Optimization settings
+learning_rate: 1e-4
+warmup_iters: 0
+learning_rate_decay_frac: 1.0
+weight_decay: 0.0
+grad_clip: 1.0
+
+# Evaluation settings
+val_loss_every: 0
+val_max_steps: 20
+sample_every: 0
+
+# Debugging settings
+overfit_single_batch: 1  # overfit a single batch of data for testing
+
+# Numerics settings
+tensorcores: 0  # set 1 to use tensor cores
+device: ""  # autodetect, or manually specify a device
+compile: 0  # set to 1 to use torch.compile
+flash: 0  # set to 1 to use flash attention
+dtype: "float32"  # options: float32 | float16 | bfloat16
+zero_stage: 0  # options: 0 | 1 | 2 | 3 for zero redundancy optimizer stage
+
+# Python -> C bridge
+write_tensors: 1  # write tensors to disk
+
+# Additional arguments
+norm_method: "layernorm"  # options: layernorm | rmsnorm
+act_layer: "gelu"  # options: gelu | swiglu
