@@ -1,5 +1,5 @@
 import torch
-from homeworks.hw2.libs.model import GPT, GPTConfig
+from libs.model import GPT, GPTConfig
 from torch.nn import functional as F
 from transformers import GPT2Tokenizer, set_seed
 
