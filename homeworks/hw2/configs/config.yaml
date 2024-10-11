@@ -14,7 +14,7 @@ save_every: 2500 # save the model every this many iterations
 # Training settings
 batch_size: 8
 sequence_length: 1024
-total_batch_size: 524288
+total_batch_size: 524288 # total number of tokens in a batch (~0.5M)
 num_iterations: 76294
 inference_only: 0  # 0 for training, 1 for inference only
 
