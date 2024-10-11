@@ -75,8 +75,9 @@ if __name__ == "__main__":
     print0(f"total desired batch size: {config['total_batch_size']}")
     print0(f"=> calculated gradient accumulation steps: {grad_accumulation_steps}")
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    device_type = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[config["dtype"]]
+    device_type = "cuda" if torch.cuda.is_available() else "cpu"
+    device = torch.device(device_type)
+    ptdtype = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[config["dtype"]]
 
     tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
 
@@ -85,12 +86,12 @@ if __name__ == "__main__":
 
     # create the model
     model_config = {
-        "d12": GPTConfig(block_size=1024, vocab_size=50257, n_layer=12, n_head=12, n_embd=768),
-        "d24": GPTConfig(block_size=1024, vocab_size=50257, n_layer=24, n_head=16, n_embd=1024),
-        "d36": GPTConfig(block_size=1024, vocab_size=50257, n_layer=36, n_head=20, n_embd=1280),
-        "d48": GPTConfig(block_size=1024, vocab_size=50257, n_layer=48, n_head=25, n_embd=1600),
+        "d12": GPTConfig(block_size=1024, vocab_size=50257, n_layer=12, n_head=12, n_embd=768, norm_method=config["norm_method"], act_method=config["act_method"], RoPE=config["use_RoPE"], group_size=config["group_size"]),
+        "d24": GPTConfig(block_size=1024, vocab_size=50257, n_layer=24, n_head=16, n_embd=1024, norm_method=config["norm_method"], act_method=config["act_method"], RoPE=config["use_RoPE"], group_size=config["group_size"]),
+        "d36": GPTConfig(block_size=1024, vocab_size=50257, n_layer=36, n_head=20, n_embd=1280, norm_method=config["norm_method"], act_method=config["act_method"], RoPE=config["use_RoPE"], group_size=config["group_size"]),
+        "d48": GPTConfig(block_size=1024, vocab_size=50257, n_layer=48, n_head=25, n_embd=1600, norm_method=config["norm_method"], act_method=config["act_method"], RoPE=config["use_RoPE"], group_size=config["group_size"]),
     }[config["model"]]
-    model = GPT(model_config, norm_method=config["norm_method"], use_FLASH=config["flash"], use_RoPE=config["use_RoPE"])
+    model = GPT(model_config, use_FLASH=config["flash"])
     model.to(device)
     model = torch.compile(model)
     if ddp:
@@ -126,7 +127,7 @@ if __name__ == "__main__":
                 for _ in range(config["val_max_steps"]):
                     x, y = val_loader.next_batch()
                     x, y = x.to(device), y.to(device)
-                    with torch.autocast(device_type=device_type, dtype=torch.bfloat16):
+                    with torch.autocast(device_type=device_type, dtype=ptdtype):
                         logits, loss = model(x, y)
                     
                     loss /= config["val_max_steps"]
@@ -152,7 +153,7 @@ if __name__ == "__main__":
         for micro_step in range(grad_accumulation_steps):
             x, y = train_loader.next_batch()
             x, y = x.to(device), y.to(device)
-            with torch.autocast(device_type=device_type, dtype=torch.bfloat16):
+            with torch.autocast(device_type=device_type, dtype=ptdtype):
                 logits, loss = model(x, y)
             loss = loss / grad_accumulation_steps # the normalizing factor
             loss_accum += loss.detach()
