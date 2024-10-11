@@ -1,4 +1,5 @@
 import glob
+import random
 import torch
 import numpy as np
 from libs.utils import print0
@@ -40,6 +41,7 @@ class DistributedDataLoader:
         # glob files that match the pattern
         self.files = sorted(glob.glob(filename_pattern))
         assert len(self.files) > 0, f"did not find any files that match the pattern {filename_pattern}"
+        random.shuffle(self.files) # shuffle the files
 
         # load and validate all data shards, count number of tokens in total
         ntok_total = np.int64(0)

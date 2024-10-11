@@ -27,6 +27,7 @@ The validation set of HellaSwag has a total of 10,042 examples.
 
 import os
 import json
+import yaml
 import requests
 import tiktoken
 from tqdm import tqdm
@@ -129,22 +130,30 @@ def remove_prefix_from_state_dict(state_dict, prefix="_orig_mod."):
     return new_state_dict
 
 @torch.no_grad()
-def evaluate(model_type, device, ckpt_path=None):
+def evaluate(args):
+
+    with open(args.config_path, "r") as f:
+        config = yaml.safe_load(f)
+
+    model_type = config["model"]
+    print(f"evaluating model {model_type}")
+    ckpt_path = args.ckpt_path
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")   
 
     torch.set_float32_matmul_precision('high') # use tf32
     if model_type == "gpt2":
         model = GPT2LMHeadModel.from_pretrained(model_type)
     elif model_type in ["d12","d24"] and ckpt_path:
         if model_type == "d12":
-            config = GPTConfig()
+            gpt_config = GPTConfig()
         elif model_type == "d24":
-            config = GPTConfig(block_size=1024, vocab_size=50257, n_layer=24, n_head=16, n_embd=1024)
-        model = GPT(config)
+            gpt_config = GPTConfig(block_size=1024, vocab_size=50257, n_layer=24, n_head=16, n_embd=1024)
+        model = GPT(gpt_config, norm_method=config["norm_method"], use_FLASH=config["flash"], use_RoPE=config["use_RoPE"])
         # since model is compiled, we need to load the state dict into the model
         try:
             model.load_state_dict(torch.load(ckpt_path))
         except:
-            new_state_dict = remove_prefix_from_state_dict(torch.load(ckpt_path))
+            new_state_dict = remove_prefix_from_state_dict(torch.load(ckpt_path), prefix="module._orig_mod.")
             model.load_state_dict(new_state_dict)
     else:
         raise ValueError(f"unknown model type {model_type}")
@@ -190,7 +199,8 @@ def evaluate(model_type, device, ckpt_path=None):
         num_total += 1
         num_correct += int(pred == label)
         num_correct_norm += int(pred_norm == label)
-        print(f"{num_total} acc_norm: {num_correct_norm}/{num_total}={num_correct_norm/num_total:.4f}")
+        # print(f"{num_total} acc_norm: {num_correct_norm}/{num_total}={num_correct_norm/num_total:.4f}")
+        print(f"{num_total} acc: {num_correct}/{num_total}={num_correct/num_total:.4f} acc_norm: {num_correct_norm}/{num_total}={num_correct_norm/num_total:.4f}")
 
         # debug: pretty print a few examples, and the losses in each case
         if num_total < 10:
@@ -204,11 +214,8 @@ def evaluate(model_type, device, ckpt_path=None):
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("-m", "--model_type", type=str, default="gpt2", choices=["gpt2","d12","d24"], help="the model type to use")
-    parser.add_argument("-d", "--device", type=str, default="cuda", help="the device to use")
+    parser.add_argument("--config_path", type=str, default=None, help="the path to the model config")
+    parser.add_argument("-c", "--ckpt_path", type=str, default=None, help="the path to the checkpoint")
     args = parser.parse_args()
 
-    ckpt_path = None
-    if args.model_type == "d24":
-        ckpt_path = "./test/model_5000.pth" 
-    evaluate(args.model_type, args.device, ckpt_path)
+    evaluate(args)

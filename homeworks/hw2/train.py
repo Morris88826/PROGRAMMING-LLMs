@@ -51,6 +51,7 @@ def init_ddp():
     return ddp, ddp_rank, ddp_local_rank, ddp_world_size, master_process, device
 
 if __name__ == "__main__":
+    print0(f"Running pytorch {torch.version.__version__}")
     parser = argparse.ArgumentParser()
     parser.add_argument('--config', type=str, default='./configs/config.yaml', help='config file')
     args = parser.parse_args()
@@ -63,6 +64,7 @@ if __name__ == "__main__":
 
     # ddp
     ddp, ddp_rank, ddp_local_rank, ddp_world_size, master_process, device = init_ddp()
+    print(f"running with DDP: {ddp}, device: {device}, world size: {ddp_world_size}", flush=True)
     # print("This is GPU", ddp_local_rank, "out of", ddp_world_size)
     # destroy_process_group() # clean up
     # import sys; sys.exit(0)
@@ -70,12 +72,11 @@ if __name__ == "__main__":
     
     assert config["total_batch_size"] % (config["batch_size"]*config["sequence_length"]*ddp_world_size) == 0, "total_batch_size must be divisible by B*T*world_size"
     grad_accumulation_steps = config["total_batch_size"] // (config["batch_size"]*config["sequence_length"]*ddp_world_size)
-    print0(f"Total batch size: {config['total_batch_size']}, grad_accumulation_steps: {grad_accumulation_steps}")
-
-
+    print0(f"total desired batch size: {config['total_batch_size']}")
+    print0(f"=> calculated gradient accumulation steps: {grad_accumulation_steps}")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    device_type = "cuda" if torch.cuda.is_available() else "cpu"
+    device_type = {'float32': torch.float32, 'bfloat16': torch.bfloat16, 'float16': torch.float16}[config["dtype"]]
 
     tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
 
@@ -83,7 +84,13 @@ if __name__ == "__main__":
     val_loader = DistributedDataLoader(config["input_val_bin"], config["batch_size"], config["sequence_length"], ddp_rank, ddp_world_size)
 
     # create the model
-    model = GPT(GPTConfig(), norm_method=config["norm_method"], use_FLASH=config["flash"], use_RoPE=config["use_RoPE"])
+    model_config = {
+        "d12": GPTConfig(block_size=1024, vocab_size=50257, n_layer=12, n_head=12, n_embd=768),
+        "d24": GPTConfig(block_size=1024, vocab_size=50257, n_layer=24, n_head=16, n_embd=1024),
+        "d36": GPTConfig(block_size=1024, vocab_size=50257, n_layer=36, n_head=20, n_embd=1280),
+        "d48": GPTConfig(block_size=1024, vocab_size=50257, n_layer=48, n_head=25, n_embd=1600),
+    }[config["model"]]
+    model = GPT(model_config, norm_method=config["norm_method"], use_FLASH=config["flash"], use_RoPE=config["use_RoPE"])
     model.to(device)
     model = torch.compile(model)
     if ddp:
@@ -94,12 +101,17 @@ if __name__ == "__main__":
 
     # create the logging directory if it does not exist
     logfile = None
-    if config["output_dir"] is not None:
-        os.makedirs(config["output_dir"], exist_ok=True)
-        logfile = os.path.join(config["output_dir"], "main.log")
+    output_dir = os.path.join(config["output_dir"], config["name"])
+    if output_dir is not None:
+        os.makedirs(output_dir, exist_ok=True)
+        logfile = os.path.join(output_dir, "main.log")
         # create the log file "main.log" inside it, and wipe it clean
         with open(logfile, "w") as f:
             pass
+
+        # save the config file
+        with open(os.path.join(output_dir, "config.yaml"), "w") as f:
+            yaml.dump(config, f)
     
     # reach min lr after the first epoch
     min_lr_step  = train_loader.ntok_total // config["total_batch_size"] 
@@ -121,11 +133,11 @@ if __name__ == "__main__":
                     val_loss_accum += loss.detach()
                 if ddp:
                     dist.all_reduce(val_loss_accum, op=dist.ReduceOp.AVG)
-            print0(f"Validation loss: {val_loss_accum.item():.6f}")
+            print0(f"val loss: {val_loss_accum.item():.6f}")
             if master_process and logfile is not None:
                 # save the model checkpoint
-                ckpt_path = os.path.join(config["output_dir"], f"step_{step}.pth")
-                print0(f"Saving checkpoint to {ckpt_path}")
+                ckpt_path = os.path.join(output_dir, f"step_{step}.pth")
+                print0(f"saving model checkpoint to {ckpt_path}")
                 torch.save(model.state_dict(), ckpt_path)
 
                 with open(logfile, "a") as f:
@@ -164,7 +176,7 @@ if __name__ == "__main__":
         dt = t1 - t0
         token_processed = grad_accumulation_steps * train_loader.B * train_loader.T * ddp_world_size
         token_throughput = token_processed / dt
-        print0(f"Epoch {step}, Loss: {loss_accum.item():.6f}, lr: {lr:4f}, norm: {norm:.4f}, dt: {dt*1000:.2f}ms, token throughput: {token_throughput:.2f} tokens/s")
+        print0(f"step {step+1:4d}/{config['num_iterations']} | train loss {loss_accum.item():.6f} | norm {norm:.4f} | lr {lr:.2e} | ({(t1-t0)*1000:.2f} ms | {token_throughput:.0f} tok/s)")
         if master_process and logfile is not None:
             with open(logfile, "a") as f:
                 f.write("step: %d | train loss: %.6f\n" % (step, loss_accum.item()))
