@@ -101,7 +101,8 @@ if __name__ == "__main__":
         with open(logfile, "w") as f:
             pass
     
-
+    # reach min lr after the first epoch
+    min_lr_step  = train_loader.ntok_total // config["total_batch_size"] 
     for step in range(config["num_iterations"]+1):
         last_step = step == config["num_iterations"]
         # once in a while, check the validation loss
@@ -153,7 +154,7 @@ if __name__ == "__main__":
 
         norm = torch.nn.utils.clip_grad_norm_(model.parameters(), config["grad_clip"]) # clip the gradients, prevent exploding
 
-        lr = get_lr(step, max_lr=config["learning_rate"], p=config["learning_rate_decay_frac"], warmup_steps=config["warmup_iters"], max_steps=config["num_iterations"])
+        lr = get_lr(step, max_lr=config["learning_rate"], p=config["learning_rate_decay_frac"], warmup_steps=config["warmup_iters"], max_steps=min_lr_step)
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr
         optimizer.step()
