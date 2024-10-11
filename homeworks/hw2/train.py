@@ -65,7 +65,6 @@ if __name__ == "__main__":
     # ddp
     ddp, ddp_rank, ddp_local_rank, ddp_world_size, master_process, device = init_ddp()
     print(f"running with DDP: {ddp}, device: {device}, world size: {ddp_world_size}", flush=True)
-    # print("This is GPU", ddp_local_rank, "out of", ddp_world_size)
     # destroy_process_group() # clean up
     # import sys; sys.exit(0)
 
