@@ -4,6 +4,7 @@ import torch.nn as nn
 from torch.nn import functional as F
 from dataclasses import dataclass
 from transformers import GPT2LMHeadModel
+from utils import print0
 
 class SwiGLU(nn.Module):
     def __init__(self, input_dim):
@@ -22,6 +23,7 @@ class NewGELU(nn.Module):
     """Careful there are a few versions of GeLU, this one is the exact one used by OpenAI"""
     def forward(self, input):
         return 0.5 * input * (1.0 + torch.tanh(math.sqrt(2.0 / math.pi) * (input + 0.044715 * torch.pow(input, 3.0))))
+
 
 class RotaryPositionalEmbeddings(nn.Module):
     """
@@ -48,7 +50,7 @@ class RotaryPositionalEmbeddings(nn.Module):
         self,
         dim: int,
         max_seq_len: int = 4096,
-        base: int = 10_000,
+        base: int = 10000,
     ) -> None:
         super().__init__()
         self.dim = dim
@@ -77,12 +79,15 @@ class RotaryPositionalEmbeddings(nn.Module):
 
         # Outer product of theta and position index; output tensor has
         # a shape of [max_seq_len, dim // 2]
-        idx_theta = torch.einsum("i, j -> ij", seq_idx, self.theta).float()
-
+        idx_theta = torch.einsum("i, j -> ij", seq_idx, self.theta).float() # outer product: ix1 * 1xj
+        
         # cache includes both the cos and sin components and so the output shape is
         # [max_seq_len, dim // 2, 2]
         cache = torch.stack([torch.cos(idx_theta), torch.sin(idx_theta)], dim=-1)
         self.register_buffer("cache", cache, persistent=False)
+
+        # cache[m, k, 0] = cos(m * theta[k])
+        # cache[m, k, 1] = sin(m * theta[k])
 
     def forward(self, x):
         """
@@ -114,7 +119,7 @@ class RotaryPositionalEmbeddings(nn.Module):
         # reshape the cache for broadcasting
         # tensor has shape [b, s, 1, h_d // 2, 2] if packed samples,
         # otherwise has shape [1, s, 1, h_d // 2, 2]
-        rope_cache = rope_cache.view(-1, xshaped.size(1), 1, xshaped.size(3), 2)
+        rope_cache = rope_cache.view(-1, xshaped.size(1), 1, xshaped.size(3), 2) # expand the batch and head dimensions
 
         # tensor has shape [b, s, n_h, h_d // 2, 2]
         x_out = torch.stack(
@@ -130,7 +135,6 @@ class RotaryPositionalEmbeddings(nn.Module):
         # tensor has shape [b, s, n_h, h_d]
         x_out = x_out.flatten(3)
         return x_out.type_as(x)
-
 
 # multi-head attention (causal self-attention for autoregressive models)
 class CausalSelfAttention(nn.Module):
@@ -150,7 +154,7 @@ class CausalSelfAttention(nn.Module):
         self.FLASH = FLASH
         self.RoPE = RoPE
         if RoPE:
-            self.RoPE = RotaryPositionalEmbeddings(config.n_embd // config.n_head, max_seq_len=config.block_size)
+            self.RoPE = RotaryPositionalEmbeddings(config.n_embd // config.n_head, max_seq_len=config.block_size * 2) # calculate a longer sequence length for RoPE
 
         # bias for masked attention (lower triangular matrix), register as buffer (not learnable). Set the block size to the maximum sequence length so that we can reuse the same bias for all sequence lengths.
         # don't change the upper triangular part to -inf here for efficiency, we will do it on the fly during the attention operation (only change the values that we will actually, i.e. the sequence length)
@@ -225,7 +229,7 @@ class Block(nn.Module):
 
 @dataclass
 class GPTConfig:
-    block_size: int = 1024
+    block_size: int = 1024 # maximum sequence length
     vocab_size: int = 50257 # number of tokens
     n_layer: int = 12
     n_head: int = 12  # number of heads, d_head = d_model // n_head
@@ -235,7 +239,7 @@ class GPT(nn.Module):
     def __init__(self, config, norm_method="layernorm", act_method="gelu", use_RoPE=False, use_FLASH=False):
         super().__init__()
         self.config = config
-
+    
         norm_layer = nn.LayerNorm if norm_method == 'layernorm' else nn.RMSNorm
         self.use_FLASH = use_FLASH
         self.use_RoPE = use_RoPE
@@ -288,6 +292,11 @@ class GPT(nn.Module):
             {"params": no_decay_params, "weight_decay": 0.0}
         ]
 
+        num_decay_params = sum(p.numel() for p in decay_params)
+        num_nodecay_params = sum(p.numel() for p in no_decay_params)
+        print0(f"num decayed parameter tensors: {len(decay_params)}, with {num_decay_params:,} parameters")
+        print0(f"num non-decayed parameter tensors: {len(no_decay_params)}, with {num_nodecay_params:,} parameters")
+
         optimizer = torch.optim.AdamW(optim_groups, lr=learning_rate, betas=betas, eps=eps)
         return optimizer
         
@@ -298,10 +307,11 @@ class GPT(nn.Module):
         assert T <= self.config.block_size, f"Sequence length is too long ({T} > {self.config.block_size})"
 
         pos = torch.arange(T, dtype=torch.long, device=idx.device) # T
-        tok_emb = self.transformer.wte(idx) # token embeddings of shape (b, t, n_embd)
         if self.use_RoPE:
+            tok_emb = self.transformer.wte(idx) # token embeddings of shape (b, t, n_embd)
             x = tok_emb
-        else:
+        else: # use the original GPT-2 model: token embeddings + global position embeddings
+            tok_emb = self.transformer.wte(idx) # token embeddings of shape (b, t, n_embd)
             pos_emb = self.transformer.wpe(pos) # position embeddings of shape (t, n_embd)
             x = tok_emb + pos_emb
 

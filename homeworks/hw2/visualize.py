@@ -5,12 +5,13 @@ import matplotlib.pyplot as plt
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--log_path', type=str, default='./results/gpt2-124M/main.log', help='path to the log file')
+    parser.add_argument('--config', type=str, help='path to config file')
     args = parser.parse_args()
 
-    out_dir = os.path.dirname(args.log_path)
+    out_dir = os.path.dirname(args.config)
 
-    with open(args.log_path, "r") as f:
+    log_path = os.path.join(out_dir, 'main.log')
+    with open(log_path, "r") as f:
         lines = f.readlines()
 
     train_loss = np.array([[int(line.split(' ')[1]), float(line.split(' ')[-1][:-1])] for line in lines if 'train' in line ])
