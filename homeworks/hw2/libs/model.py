@@ -4,26 +4,28 @@ import torch.nn as nn
 from torch.nn import functional as F
 from dataclasses import dataclass
 from transformers import GPT2LMHeadModel
-from utils import print0
+from libs.utils import print0
 
-class SwiGLU(nn.Module):
-    def __init__(self, input_dim):
-        super(SwiGLU, self).__init__()
-        self.fc = nn.Linear(input_dim, input_dim * 2)
 
-    def forward(self, x):
-        # Split the input into two halves for SwiGLU
-        x = self.fc(x)
-        x_gated, x_swiglu = x.chunk(2, dim=-1)
-        # Apply Swish activation (x * sigmoid(x)) to one part
-        return x_gated * torch.sigmoid(x_swiglu)
-    
+@dataclass
+class GPTConfig:
+    block_size: int = 1024 # maximum sequence length
+    vocab_size: int = 50257 # number of tokens
+    n_layer: int = 12
+    n_head: int = 12  # number of heads, d_head = d_model // n_head
+    n_embd: int = 768 # d_model
+
+    ### Additional parameters
+    norm_method: str = "layernorm" # layernorm or rmsnorm
+    act_method: str = "gelu" # gelu or swiglu
+    RoPE: bool = False # use Rotary Positional Embeddings
+    group_size: int = 1 # group size for Grouped Query Attention
+
 
 class NewGELU(nn.Module):
     """Careful there are a few versions of GeLU, this one is the exact one used by OpenAI"""
     def forward(self, input):
         return 0.5 * input * (1.0 + torch.tanh(math.sqrt(2.0 / math.pi) * (input + 0.044715 * torch.pow(input, 3.0))))
-
 
 class RotaryPositionalEmbeddings(nn.Module):
     """
@@ -138,23 +140,31 @@ class RotaryPositionalEmbeddings(nn.Module):
 
 # multi-head attention (causal self-attention for autoregressive models)
 class CausalSelfAttention(nn.Module):
-    def __init__(self, config, FLASH=False, RoPE=False):
+    def __init__(self, config: GPTConfig, FLASH=False):
         super().__init__()
         assert config.n_embd % config.n_head == 0
+        assert config.n_head % config.group_size == 0
 
-        # key, query, value projection for all heads
-        self.c_attn = nn.Linear(config.n_embd, config.n_embd * 3)
+        self.group_size = config.group_size
+
+        # query, key, value projection for all heads
+        self.wq = nn.Linear(config.n_embd, config.n_embd)
+        self.wk = nn.Linear(config.n_embd, config.n_embd // self.group_size)
+        self.wv = nn.Linear(config.n_embd, config.n_embd // self.group_size)
+
         # output projection
         self.c_proj = nn.Linear(config.n_embd, config.n_embd)
         self.c_proj.LLMC_RESIDUAL_SCALE_FLAG = 1
         # regularization
         self.n_head = config.n_head
         self.n_embd = config.n_embd
+        self.head_dim = config.n_embd // config.n_head
 
-        self.FLASH = FLASH
-        self.RoPE = RoPE
-        if RoPE:
-            self.RoPE = RotaryPositionalEmbeddings(config.n_embd // config.n_head, max_seq_len=config.block_size * 2) # calculate a longer sequence length for RoPE
+        self.use_FLASH = FLASH
+        self.use_RoPE = config.RoPE
+        if self.use_RoPE:
+            self.RoPE = RotaryPositionalEmbeddings(self.head_dim, max_seq_len=config.block_size * 2) # calculate a longer sequence length for RoPE
+
 
         # bias for masked attention (lower triangular matrix), register as buffer (not learnable). Set the block size to the maximum sequence length so that we can reuse the same bias for all sequence lengths.
         # don't change the upper triangular part to -inf here for efficiency, we will do it on the fly during the attention operation (only change the values that we will actually, i.e. the sequence length)
@@ -162,35 +172,35 @@ class CausalSelfAttention(nn.Module):
                             .view(1, 1, config.block_size, config.block_size))
         
     def forward(self, x):
-        B, T, C = x.size() # batch, sequence length, channels
+        B, T, C = x.size() # batch, sequence length, n_embd
         assert C == self.n_embd
 
-        qkv = self.c_attn(x)
-        q, k, v = qkv.split(self.n_embd, dim=2)
+        q = self.wq(x) # B, T, n_embd 
+        k = self.wk(x) # B, T, n_embd // n_head
+        v = self.wv(x) # B, T, n_embd // n_head
 
-        # nh = number of heads
-        # hs = head size = n_embd // n_head
-        # C = n_embd = nh * hs
-        q = q.view(B, T, self.n_head, self.n_embd // self.n_head).transpose(1, 2) # B, n_head, T, hs
-        k = k.view(B, T, self.n_head, self.n_embd // self.n_head).transpose(1, 2) # B, n_head, T, hs
-        v = v.view(B, T, self.n_head, self.n_embd // self.n_head).transpose(1, 2) # B, n_head, T, hs
+        q = q.view(B, T, self.n_head, self.head_dim).transpose(1, 2) # B, n_head, T, head_dim
+        k = k.view(B, T, self.n_head // self.group_size, self.head_dim).transpose(1, 2) # B, n_head/group_size, T, head_dim
+        v = v.view(B, T, self.n_head // self.group_size, self.head_dim).transpose(1, 2) # B, n_head/group_size, T, head_dim
 
-        assert k.size() == (B, self.n_head, T, self.n_embd // self.n_head)
-        assert q.size() == (B, self.n_head, T, self.n_embd // self.n_head)
-        assert v.size() == (B, self.n_head, T, self.n_embd // self.n_head)
+        assert q.size() == (B, self.n_head, T, self.head_dim)
+        assert k.size() == (B, self.n_head // self.group_size, T, self.head_dim)
+        assert v.size() == (B, self.n_head // self.group_size, T, self.head_dim)
 
         # attention
-        d_k = self.n_embd // self.n_head # head size
-
-        if self.RoPE:
+        if self.use_RoPE:
             q = self.RoPE(q)
             k = self.RoPE(k)
 
-        if self.FLASH:
+        if self.group_size > 1: # repeat k and v for each group
+            k = k[:, :, None, :, :].expand(B, self.n_head//self.group_size, self.group_size, T, self.head_dim).reshape(B, self.n_head, T, self.head_dim)
+            v = v[:, :, None, :, :].expand(B, self.n_head//self.group_size, self.group_size, T, self.head_dim).reshape(B, self.n_head, T, self.head_dim)
+
+        if self.use_FLASH:
             # optimized version of the attention
             y = F.scaled_dot_product_attention(q, k, v, is_causal=True)
         else:
-            att = torch.matmul(q, k.transpose(-2, -1)) / (d_k ** 0.5)
+            att = torch.matmul(q, k.transpose(-2, -1)) / (self.head_dim ** 0.5)
             att = att.masked_fill(self.bias[:, :, :T, :T] == 0, float('-inf')) # mask out the upper triangular part so that we attend only to the left in the input sequence
             att = F.softmax(att, dim=-1)
             y = torch.matmul(att, v) # B, n_head, T, hs
@@ -199,11 +209,28 @@ class CausalSelfAttention(nn.Module):
         y = self.c_proj(y)
         return y
 
-class MLP(nn.Module):
-    def __init__(self, config, act_layer='gelu'):
+class FFN_SwiGLU(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        hidden_dim = int(2/3 * 4 * config.n_embd) # suggested by GLU Variants paper
+        self.w1 = nn.Linear(config.n_embd, hidden_dim, bias=False)
+        self.v = nn.Linear(config.n_embd, hidden_dim, bias=False)
+        self.w2 = nn.Linear(hidden_dim, config.n_embd, bias=False)
+        self.act_layer = nn.SiLU()
+    
+    def forward(self, x):
+        swish = self.act_layer(self.w1(x))
+        x_V = self.v(x)
+        x = swish * x_V
+        x = self.w2(x)
+        return x
+    
+
+class FFN(nn.Module):
+    def __init__(self, config):
         super().__init__()
         self.c_fc = nn.Linear(config.n_embd, 4 * config.n_embd)
-        self.act_layer = NewGELU() if act_layer == 'gelu' else SwiGLU(config.n_embd * 4)
+        self.act_layer = NewGELU()
         self.c_proj  = nn.Linear(4 * config.n_embd, config.n_embd)
         self.c_proj.LLMC_RESIDUAL_SCALE_FLAG = 1
 
@@ -214,12 +241,20 @@ class MLP(nn.Module):
         return x
     
 class Block(nn.Module):
-    def __init__(self, config, norm_layer=nn.LayerNorm, act_layer="gelu", RoPE=False):
+    def __init__(self, config: GPTConfig, FLASH=False):
         super().__init__()
+
+        norm_layer = nn.LayerNorm
+        if config.norm_method == "rmsnorm":
+            norm_layer = nn.RMSNorm
+        
         self.n_1 = norm_layer(config.n_embd)
-        self.attn = CausalSelfAttention(config, RoPE)
+        self.attn = CausalSelfAttention(config, FLASH=FLASH)
         self.n_2 = norm_layer(config.n_embd)
-        self.mlp = MLP(config, act_layer)
+        if config.act_method == "gelu":
+            self.mlp = FFN(config)
+        elif config.act_method == "swiglu":
+            self.mlp = FFN_SwiGLU(config)
 
     def forward(self, x):
         x = x + self.attn(self.n_1(x))
@@ -227,34 +262,28 @@ class Block(nn.Module):
         return x
 
 
-@dataclass
-class GPTConfig:
-    block_size: int = 1024 # maximum sequence length
-    vocab_size: int = 50257 # number of tokens
-    n_layer: int = 12
-    n_head: int = 12  # number of heads, d_head = d_model // n_head
-    n_embd: int = 768 # d_model
-
+# norm_method="layernorm", act_method="gelu", use_RoPE=False, use_FLASH=False, group_size=1
 class GPT(nn.Module):
-    def __init__(self, config, norm_method="layernorm", act_method="gelu", use_RoPE=False, use_FLASH=False):
+    def __init__(self, config: GPTConfig, use_FLASH=False):
         super().__init__()
         self.config = config
-    
-        norm_layer = nn.LayerNorm if norm_method == 'layernorm' else nn.RMSNorm
-        self.use_FLASH = use_FLASH
-        self.use_RoPE = use_RoPE
+        self.FLASH = use_FLASH
 
-        if self.use_RoPE:
+        norm_layer = nn.LayerNorm
+        if config.norm_method == "rmsnorm":
+            norm_layer = nn.RMSNorm
+
+        if config.RoPE:
             self.transformer = nn.ModuleDict(dict(
                 wte = nn.Embedding(config.vocab_size, config.n_embd),
-                h = nn.ModuleList([Block(config, norm_layer, act_method, use_RoPE) for _ in range(config.n_layer)]),
+                h = nn.ModuleList([Block(config, FLASH=self.FLASH) for _ in range(config.n_layer)]),
                 ln_f = norm_layer(config.n_embd),
             ))
         else:
             self.transformer = nn.ModuleDict(dict(
                 wte = nn.Embedding(config.vocab_size, config.n_embd),
                 wpe = nn.Embedding(config.block_size, config.n_embd),
-                h = nn.ModuleList([Block(config, norm_layer, act_method) for _ in range(config.n_layer)]),
+                h = nn.ModuleList([Block(config, FLASH=self.FLASH) for _ in range(config.n_layer)]),
                 ln_f = norm_layer(config.n_embd),
             ))
 
@@ -307,7 +336,7 @@ class GPT(nn.Module):
         assert T <= self.config.block_size, f"Sequence length is too long ({T} > {self.config.block_size})"
 
         pos = torch.arange(T, dtype=torch.long, device=idx.device) # T
-        if self.use_RoPE:
+        if self.config.RoPE:
             tok_emb = self.transformer.wte(idx) # token embeddings of shape (b, t, n_embd)
             x = tok_emb
         else: # use the original GPT-2 model: token embeddings + global position embeddings

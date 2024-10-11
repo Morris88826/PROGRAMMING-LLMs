@@ -1,5 +1,5 @@
 # config.yaml
-name: gpt2-124M-v2  # name of the experiment
+name: gpt2-124M-gqa  # name of the experiment
 
 # File system input/output settings
 input_bin: "data/fineweb10B/fineweb_train_*.bin"
@@ -46,5 +46,6 @@ write_tensors: 1  # write tensors to disk
 
 # Additional arguments
 norm_method: "rmsnorm"  # options: layernorm | rmsnorm
-act_layer: "swiglu"  # options: gelu | swiglu
+act_method: "swiglu"  # options: gelu | swiglu
 use_RoPE: 1  # set to 1 to use ROPE
+group_size: 2  # set to 1 to use group size
