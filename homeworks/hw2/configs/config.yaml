@@ -1,5 +1,5 @@
 # config.yaml
-name: gpt2-124M-gqa  # name of the experiment
+name: gpt2-350M-ori  # name of the experiment
 
 # File system input/output settings
 input_bin: "data/fineweb10B/fineweb_train_*.bin"
@@ -7,7 +7,7 @@ input_val_bin: "data/fineweb10B/fineweb_val_*.bin"
 output_dir: "./results"  # directory to save the model
 
 # Model configuration
-model: "d12"  # options: gpt2 | gpt2-medium | gpt2-large | gpt2-xl | d12 | d24 | d36 | d48
+model: "d24"  # options: gpt2 | gpt2-medium | gpt2-large | gpt2-xl | d12 | d24 | d36 | d48
 
 save_every: 2500 # save the model every this many iterations
 

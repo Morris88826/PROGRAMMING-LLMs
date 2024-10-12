@@ -35,7 +35,8 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 from libs.model import GPT, GPTConfig
-from transformers import GPT2LMHeadModel
+from transformers import GPT2LMHeadModel, AutoModel, AutoConfig
+from libs.utils import remove_prefix_from_state_dict
 
 # -----------------------------------------------------------------------------
 DATA_CACHE_DIR = os.path.join(os.path.dirname(__file__), "data", "hellaswag")
@@ -119,19 +120,8 @@ def iterate_examples(split):
             example = json.loads(line)
             yield example
 
-def remove_prefix_from_state_dict(state_dict, prefix="_orig_mod."):
-    new_state_dict = {}
-    for k, v in state_dict.items():
-        if k.startswith(prefix):
-            new_key = k[len(prefix):]
-            new_state_dict[new_key] = v
-        else:
-            new_state_dict[k] = v
-    return new_state_dict
-
 @torch.no_grad()
 def evaluate(args):
-
     with open(args.config_path, "r") as f:
         config = yaml.safe_load(f)
 
@@ -140,23 +130,39 @@ def evaluate(args):
     ckpt_path = args.ckpt_path
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")   
 
-    torch.set_float32_matmul_precision('high') # use tf32
+    if config["tensorcores"]:
+        torch.set_float32_matmul_precision('high') # use tf32
+
     if model_type == "gpt2":
         model = GPT2LMHeadModel.from_pretrained(model_type)
     elif model_type in ["d12","d24"] and ckpt_path:
-        if model_type == "d12":
-            gpt_config = GPTConfig()
-        elif model_type == "d24":
-            gpt_config = GPTConfig(block_size=1024, vocab_size=50257, n_layer=24, n_head=16, n_embd=1024)
-        model = GPT(gpt_config, norm_method=config["norm_method"], use_FLASH=config["flash"], use_RoPE=config["use_RoPE"])
-        # since model is compiled, we need to load the state dict into the model
-        try:
-            model.load_state_dict(torch.load(ckpt_path))
-        except:
-            new_state_dict = remove_prefix_from_state_dict(torch.load(ckpt_path), prefix="module._orig_mod.")
-            model.load_state_dict(new_state_dict)
+        if args.huggingface:
+            AutoConfig.register("custom-gpt2", GPTConfig)
+            AutoModel.register(GPTConfig, GPT)
+            model = AutoModel.from_pretrained("./hf_models/custom-gpt2")
+            raise ValueError("stop here")
+        else:
+            gpt_config = {
+                "d12": GPTConfig(block_size=1024, vocab_size=50257, n_layer=12, n_head=12, n_embd=768, norm_method=config["norm_method"], act_method=config["act_method"], RoPE=config["use_RoPE"], group_size=config["group_size"]),
+                "d24": GPTConfig(block_size=1024, vocab_size=50257, n_layer=24, n_head=16, n_embd=1024, norm_method=config["norm_method"], act_method=config["act_method"], RoPE=config["use_RoPE"], group_size=config["group_size"]),
+                "d36": GPTConfig(block_size=1024, vocab_size=50257, n_layer=36, n_head=20, n_embd=1280, norm_method=config["norm_method"], act_method=config["act_method"], RoPE=config["use_RoPE"], group_size=config["group_size"]),
+                "d48": GPTConfig(block_size=1024, vocab_size=50257, n_layer=48, n_head=25, n_embd=1600, norm_method=config["norm_method"], act_method=config["act_method"], RoPE=config["use_RoPE"], group_size=config["group_size"]),
+            }[config["model"]]
+            model = GPT(gpt_config, use_FLASH=config["flash"])
+
+            # since model is compiled, we need to load the state dict into the model
+            try:
+                model.load_state_dict(torch.load(ckpt_path))
+            except:
+                new_state_dict = remove_prefix_from_state_dict(torch.load(ckpt_path), prefix="_orig_mod.")
+                model.load_state_dict(new_state_dict)
     else:
         raise ValueError(f"unknown model type {model_type}")
+    
+    for param in model.parameters():
+        print(param)
+    raise ValueError("stop here")
+    model.eval()
     model.to(device)
     # model = torch.compile(model) # optionally torch compile the model
 
@@ -216,6 +222,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config_path", type=str, default=None, help="the path to the model config")
     parser.add_argument("-c", "--ckpt_path", type=str, default=None, help="the path to the checkpoint")
+    parser.add_argument("--huggingface", action="store_true", help="use huggingface model")
     args = parser.parse_args()
 
     evaluate(args)

@@ -2,24 +2,27 @@ import math
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
-from dataclasses import dataclass
-from transformers import GPT2LMHeadModel
-from libs.utils import print0
+from transformers import GPT2LMHeadModel, PretrainedConfig, PreTrainedModel
+try:
+    from libs.utils import print0, remove_prefix_from_state_dict
+except ImportError:
+    from utils import print0, remove_prefix_from_state_dict
 
+class GPTConfig(PretrainedConfig):
+    model_type = "custom-gpt2"
+    def __init__(self, block_size=1024, vocab_size=50257, n_layer=12, n_head=12, n_embd=768, norm_method="layernorm", act_method="gelu", RoPE=False, group_size=1, **kwargs):
+        super().__init__(**kwargs)
+        self.block_size = block_size # maximum sequence length
+        self.vocab_size = vocab_size # number of tokens
+        self.n_layer = n_layer # number of layers
+        self.n_head = n_head  # number of heads, d_head = d_model // n_head
+        self.n_embd = n_embd # d_model
 
-@dataclass
-class GPTConfig:
-    block_size: int = 1024 # maximum sequence length
-    vocab_size: int = 50257 # number of tokens
-    n_layer: int = 12
-    n_head: int = 12  # number of heads, d_head = d_model // n_head
-    n_embd: int = 768 # d_model
-
-    ### Additional parameters
-    norm_method: str = "layernorm" # layernorm or rmsnorm
-    act_method: str = "gelu" # gelu or swiglu
-    RoPE: bool = False # use Rotary Positional Embeddings
-    group_size: int = 1 # group size for Grouped Query Attention
+        ### Additional parameters
+        self.norm_method = norm_method # layernorm or rmsnorm
+        self.act_method = act_method # gelu or swiglu
+        self.RoPE = RoPE # use Rotary Positional Embeddings
+        self.group_size = group_size # group size for Grouped Query Attention
 
 
 class NewGELU(nn.Module):
@@ -195,7 +198,7 @@ class CausalSelfAttention(nn.Module):
         if self.group_size > 1: # repeat k and v for each group
             k = k[:, :, None, :, :].expand(B, self.n_head//self.group_size, self.group_size, T, self.head_dim).reshape(B, self.n_head, T, self.head_dim)
             v = v[:, :, None, :, :].expand(B, self.n_head//self.group_size, self.group_size, T, self.head_dim).reshape(B, self.n_head, T, self.head_dim)
-
+    
         if self.use_FLASH:
             # optimized version of the attention
             y = F.scaled_dot_product_attention(q, k, v, is_causal=True)
@@ -263,9 +266,10 @@ class Block(nn.Module):
 
 
 # norm_method="layernorm", act_method="gelu", use_RoPE=False, use_FLASH=False, group_size=1
-class GPT(nn.Module):
+class GPT(PreTrainedModel):
+    config_class = GPTConfig
     def __init__(self, config: GPTConfig, use_FLASH=False):
-        super().__init__()
+        super().__init__(config)
         self.config = config
         self.FLASH = use_FLASH
 
@@ -357,7 +361,7 @@ class GPT(nn.Module):
             return logits
 
     @classmethod
-    def from_pretrained(cls, model_type):
+    def from_pretrained_gpt(cls, model_type):
         """
         Load a pre-trained model from Hugging Face's transformers library.
         """
@@ -397,6 +401,8 @@ class GPT(nn.Module):
         return model
 
 if __name__ == "__main__":
-    config = GPTConfig(n_layer=24, n_head=16, n_embd=1024, block_size=1024, vocab_size=50257)
+    config = GPTConfig(block_size=1024, vocab_size=50257, n_layer=12, n_head=12, n_embd=768)
     model = GPT(config)
     print("Model parameters: ", sum(p.numel() for p in model.parameters() if p.requires_grad)/1e6, "M")
+
+    
