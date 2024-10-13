@@ -127,8 +127,10 @@ if __name__ == "__main__":
                     x, y = val_loader.next_batch()
                     x, y = x.to(device), y.to(device)
                     with torch.autocast(device_type=device_type, dtype=ptdtype):
-                        logits, loss = model(x, y)
-                    
+                        out = model(x, y)
+                        logits = out["logits"]
+                        loss = out["loss"]
+
                     loss /= config["val_max_steps"]
                     val_loss_accum += loss.detach()
                 if ddp:
@@ -153,7 +155,9 @@ if __name__ == "__main__":
             x, y = train_loader.next_batch()
             x, y = x.to(device), y.to(device)
             with torch.autocast(device_type=device_type, dtype=ptdtype):
-                logits, loss = model(x, y)
+                out = model(x, y)
+                logits = out["logits"]
+                loss = out["loss"]
             loss = loss / grad_accumulation_steps # the normalizing factor
             loss_accum += loss.detach()
 

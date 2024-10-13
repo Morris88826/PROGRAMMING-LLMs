@@ -7,9 +7,7 @@ import lm_eval.models
 import lm_eval.tasks
 import lm_eval.base
 from lm_eval.utils import positional_deprecated, run_task_tests
-import sys
-sys.path.append('..')   
-from libs.model import GPT, GPTConfig
+
 
 @positional_deprecated
 def simple_evaluate(
@@ -68,27 +66,25 @@ def simple_evaluate(
 
     assert tasks != [], "No tasks specified"
 
-    # if isinstance(model, str):
-    #     if model_args is None:
-    #         model_args = ""
-    #     lm = lm_eval.models.get_model(model).create_from_arg_string(
-    #         model_args, {"batch_size": batch_size, "max_batch_size": max_batch_size, "device": device}
-    #     )
-    # else:
-    #     assert isinstance(model, lm_eval.base.LM)
-    #     lm = model
+    if isinstance(model, str):
+        if model_args is None:
+            model_args = ""
+        lm = lm_eval.models.get_model(model).create_from_arg_string(
+            model_args, {"batch_size": batch_size, "max_batch_size": max_batch_size, "device": device, "tokenizer": 'gpt2'}
+        )
+    else:
+        assert isinstance(model, lm_eval.base.LM)
+        lm = model
 
-    # if not no_cache:
-    #     lm = lm_eval.base.CachingLM(
-    #         lm,
-    #         "lm_cache/"
-    #         + (model if isinstance(model, str) else model.model.config._name_or_path)
-    #         + "_"
-    #         + model_args.replace("=", "-").replace(",", "_").replace("/", "-")
-    #         + ".db",
-    #     )
-
-    lm = GPT(GPTConfig())
+    if not no_cache:
+        lm = lm_eval.base.CachingLM(
+            lm,
+            "lm_cache/"
+            + (model if isinstance(model, str) else model.model.config._name_or_path)
+            + "_"
+            + model_args.replace("=", "-").replace(",", "_").replace("/", "-")
+            + ".db",
+        )
 
     task_dict = lm_eval.tasks.get_task_dict(tasks)
 

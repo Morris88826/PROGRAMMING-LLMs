@@ -30,12 +30,12 @@ import json
 import yaml
 import requests
 import tiktoken
+import argparse
 from tqdm import tqdm
 import torch
-import torch.nn as nn
 from torch.nn import functional as F
 from libs.model import GPT, GPTConfig
-from transformers import GPT2LMHeadModel, AutoModel, AutoConfig
+from transformers import GPT2LMHeadModel, AutoModelForCausalLM, AutoConfig
 from libs.utils import remove_prefix_from_state_dict
 
 # -----------------------------------------------------------------------------
@@ -122,7 +122,7 @@ def iterate_examples(split):
 
 @torch.no_grad()
 def evaluate(args):
-    with open(args.config_path, "r") as f:
+    with open(args.config, "r") as f:
         config = yaml.safe_load(f)
 
     model_type = config["model"]
@@ -138,9 +138,8 @@ def evaluate(args):
     elif model_type in ["d12","d24"] and ckpt_path:
         if args.huggingface:
             AutoConfig.register("custom-gpt2", GPTConfig)
-            AutoModel.register(GPTConfig, GPT)
-            model = AutoModel.from_pretrained("./hf_models/custom-gpt2")
-            raise ValueError("stop here")
+            AutoModelForCausalLM.register(GPTConfig, GPT)
+            model = AutoModelForCausalLM.from_pretrained(f'./hf_models/{config["name"]}')
         else:
             gpt_config = {
                 "d12": GPTConfig(block_size=1024, vocab_size=50257, n_layer=12, n_head=12, n_embd=768, norm_method=config["norm_method"], act_method=config["act_method"], RoPE=config["use_RoPE"], group_size=config["group_size"]),
@@ -159,9 +158,7 @@ def evaluate(args):
     else:
         raise ValueError(f"unknown model type {model_type}")
     
-    for param in model.parameters():
-        print(param)
-    raise ValueError("stop here")
+
     model.eval()
     model.to(device)
     # model = torch.compile(model) # optionally torch compile the model
@@ -176,7 +173,7 @@ def evaluate(args):
 
         # get the logits
         try:
-            logits = model(tokens).logits
+            logits = model(tokens)["logits"]
         except:
             logits = model(tokens)
 
@@ -218,10 +215,9 @@ def evaluate(args):
             print(f"predicted: {pred_norm}, actual: {label}")
 
 if __name__ == "__main__":
-    import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config_path", type=str, default=None, help="the path to the model config")
-    parser.add_argument("-c", "--ckpt_path", type=str, default=None, help="the path to the checkpoint")
+    parser.add_argument("--config", type=str, default=None, help="the path to the model config")
+    parser.add_argument("--ckpt_path", type=str, default=None, help="the path to the checkpoint")
     parser.add_argument("--huggingface", action="store_true", help="use huggingface model")
     args = parser.parse_args()
 

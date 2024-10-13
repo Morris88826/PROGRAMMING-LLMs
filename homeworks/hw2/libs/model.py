@@ -244,9 +244,9 @@ class FFN(nn.Module):
         return x
     
 class Block(nn.Module):
-    def __init__(self, config: GPTConfig, FLASH=False):
+    def __init__(self, config: GPTConfig, FLASH=False, pre_norm=True):
         super().__init__()
-
+        self.pre_norm = pre_norm
         norm_layer = nn.LayerNorm
         if config.norm_method == "rmsnorm":
             norm_layer = nn.RMSNorm
@@ -260,14 +260,21 @@ class Block(nn.Module):
             self.mlp = FFN_SwiGLU(config)
 
     def forward(self, x):
-        x = x + self.attn(self.n_1(x))
-        x = x + self.mlp(self.n_2(x))
+        if self.pre_norm: # pre-normalization
+            x = x + self.attn(self.n_1(x)).to(x.device)
+            x = x + self.mlp(self.n_2(x)).to(x.device)
+        else: # post-normalization
+            x = x + self.attn(x).to(x.device)
+            x = self.n_1(x)
+            x = x + self.mlp(x).to(x.device)
+            x = self.n_2(x)
         return x
 
 
 # norm_method="layernorm", act_method="gelu", use_RoPE=False, use_FLASH=False, group_size=1
 class GPT(PreTrainedModel):
     config_class = GPTConfig
+    _no_split_modules = ["transformer.wte", "transformer.wpe", "transformer.h", "transformer.ln_f"]
     def __init__(self, config: GPTConfig, use_FLASH=False):
         super().__init__(config)
         self.config = config
@@ -286,7 +293,7 @@ class GPT(PreTrainedModel):
         else:
             self.transformer = nn.ModuleDict(dict(
                 wte = nn.Embedding(config.vocab_size, config.n_embd),
-                wpe = nn.Embedding(config.block_size, config.n_embd),
+                wpe = nn.Embedding(config.block_size, config.n_embd), # learned positional embeddings
                 h = nn.ModuleList([Block(config, FLASH=self.FLASH) for _ in range(config.n_layer)]),
                 ln_f = norm_layer(config.n_embd),
             ))
@@ -356,9 +363,14 @@ class GPT(PreTrainedModel):
 
         if targets is not None:
             loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1))
-            return logits, loss
+            return {
+                "logits": logits,
+                "loss": loss
+            }
         else:
-            return logits
+            return {
+                "logits": logits
+            }
 
     @classmethod
     def from_pretrained_gpt(cls, model_type):

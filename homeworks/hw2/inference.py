@@ -1,8 +1,10 @@
+import yaml
 import torch
-from libs.model import GPT, GPTConfig
+import argparse
 from torch.nn import functional as F
 from transformers import GPT2Tokenizer, set_seed
-
+from libs.model import GPT, GPTConfig
+from libs.utils import remove_prefix_from_state_dict    
 
 def inference(prompt, model, tokenizer, num_return_sequences=1, max_length=30, verbose=False, seed=None, device = torch.device("cuda" if torch.cuda.is_available() else "cpu")):
     model.to(device)
@@ -24,7 +26,7 @@ def inference(prompt, model, tokenizer, num_return_sequences=1, max_length=30, v
     
     while x.size(1) < max_length:
         with torch.no_grad():
-            logits = model(x) # B, T, vocab_size
+            logits = model(x)["logits"] # B, T, vocab_size
 
             # import code; code.interact(local=locals())
 
@@ -52,6 +54,11 @@ def inference(prompt, model, tokenizer, num_return_sequences=1, max_length=30, v
     return output
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", type=str, default=None, help="the path to the model config")
+    parser.add_argument("--ckpt_path", type=str, default=None, help="the path to the checkpoint")
+    args = parser.parse_args()
+
     num_return_sequences = 5
     max_length = 30
     prompt = "Once upon a time"
@@ -61,6 +68,26 @@ if __name__ == "__main__":
     tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
     model = GPT.from_pretrained("gpt2")
 
-    # model = GPT(GPTConfig())
+    with open(args.config, "r") as f:
+        config = yaml.safe_load(f)
+
+    model_type = config["model"]
+    print(f"inferencing with model {model_type}")
+    ckpt_path = args.ckpt_path
+
+    gpt_config = {
+        "d12": GPTConfig(block_size=1024, vocab_size=50257, n_layer=12, n_head=12, n_embd=768, norm_method=config["norm_method"], act_method=config["act_method"], RoPE=config["use_RoPE"], group_size=config["group_size"]),
+        "d24": GPTConfig(block_size=1024, vocab_size=50257, n_layer=24, n_head=16, n_embd=1024, norm_method=config["norm_method"], act_method=config["act_method"], RoPE=config["use_RoPE"], group_size=config["group_size"]),
+        "d36": GPTConfig(block_size=1024, vocab_size=50257, n_layer=36, n_head=20, n_embd=1280, norm_method=config["norm_method"], act_method=config["act_method"], RoPE=config["use_RoPE"], group_size=config["group_size"]),
+        "d48": GPTConfig(block_size=1024, vocab_size=50257, n_layer=48, n_head=25, n_embd=1600, norm_method=config["norm_method"], act_method=config["act_method"], RoPE=config["use_RoPE"], group_size=config["group_size"]),
+    }[config["model"]]
+    model = GPT(gpt_config, use_FLASH=config["flash"])
+
+    # since model is compiled, we need to load the state dict into the model
+    try:
+        model.load_state_dict(torch.load(ckpt_path))
+    except:
+        new_state_dict = remove_prefix_from_state_dict(torch.load(ckpt_path), prefix="_orig_mod.")
+        model.load_state_dict(new_state_dict)
 
     output = inference(prompt, model, tokenizer, num_return_sequences=num_return_sequences, max_length=max_length, verbose=True, seed=42)
