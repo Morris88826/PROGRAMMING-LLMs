@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import yaml
 import torch
 import argparse
@@ -6,13 +5,6 @@ from torch.nn import functional as F
 from transformers import GPT2Tokenizer, set_seed
 from libs.model import GPT, GPTConfig
 from libs.utils import remove_prefix_from_state_dict    
-=======
-import torch
-from libs.model import GPT, GPTConfig
-from torch.nn import functional as F
-from transformers import GPT2Tokenizer, set_seed
-
->>>>>>> ec543137b50c0082301468c588a2198fc0a528ef
 
 def inference(prompt, model, tokenizer, num_return_sequences=1, max_length=30, verbose=False, seed=None, device = torch.device("cuda" if torch.cuda.is_available() else "cpu")):
     model.to(device)
@@ -34,11 +26,7 @@ def inference(prompt, model, tokenizer, num_return_sequences=1, max_length=30, v
     
     while x.size(1) < max_length:
         with torch.no_grad():
-<<<<<<< HEAD
             logits = model(x)["logits"] # B, T, vocab_size
-=======
-            logits = model(x) # B, T, vocab_size
->>>>>>> ec543137b50c0082301468c588a2198fc0a528ef
 
             # import code; code.interact(local=locals())
 
@@ -66,14 +54,11 @@ def inference(prompt, model, tokenizer, num_return_sequences=1, max_length=30, v
     return output
 
 if __name__ == "__main__":
-<<<<<<< HEAD
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=str, default=None, help="the path to the model config")
     parser.add_argument("--ckpt_path", type=str, default=None, help="the path to the checkpoint")
     args = parser.parse_args()
 
-=======
->>>>>>> ec543137b50c0082301468c588a2198fc0a528ef
     num_return_sequences = 5
     max_length = 30
     prompt = "Once upon a time"
@@ -83,7 +68,6 @@ if __name__ == "__main__":
     tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
     model = GPT.from_pretrained("gpt2")
 
-<<<<<<< HEAD
     with open(args.config, "r") as f:
         config = yaml.safe_load(f)
 
@@ -105,8 +89,5 @@ if __name__ == "__main__":
     except:
         new_state_dict = remove_prefix_from_state_dict(torch.load(ckpt_path), prefix="_orig_mod.")
         model.load_state_dict(new_state_dict)
-=======
-    # model = GPT(GPTConfig())
->>>>>>> ec543137b50c0082301468c588a2198fc0a528ef
 
     output = inference(prompt, model, tokenizer, num_return_sequences=num_return_sequences, max_length=max_length, verbose=True, seed=42)
