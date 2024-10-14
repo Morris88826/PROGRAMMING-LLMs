@@ -54,6 +54,7 @@ if __name__ == "__main__":
     AutoModelForCausalLM.register(GPTConfig, GPT)
 
     # Load the custom model using AutoModel and AutoConfig
+    tokenizer = AutoTokenizer.from_pretrained(f'./hf_models/{config["name"]}')
     gpt_config = AutoConfig.from_pretrained(f'./hf_models/{config["name"]}')
     model = AutoModelForCausalLM.from_pretrained(f'./hf_models/{config["name"]}')
 

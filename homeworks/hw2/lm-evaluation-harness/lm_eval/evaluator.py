@@ -7,13 +7,6 @@ import lm_eval.models
 import lm_eval.tasks
 import lm_eval.base
 from lm_eval.utils import positional_deprecated, run_task_tests
-<<<<<<< HEAD
-
-=======
-import sys
-sys.path.append('..')   
-from libs.model import GPT, GPTConfig
->>>>>>> ec543137b50c0082301468c588a2198fc0a528ef
 
 @positional_deprecated
 def simple_evaluate(
@@ -72,7 +65,6 @@ def simple_evaluate(
 
     assert tasks != [], "No tasks specified"
 
-<<<<<<< HEAD
     if isinstance(model, str):
         if model_args is None:
             model_args = ""
@@ -92,29 +84,6 @@ def simple_evaluate(
             + model_args.replace("=", "-").replace(",", "_").replace("/", "-")
             + ".db",
         )
-=======
-    # if isinstance(model, str):
-    #     if model_args is None:
-    #         model_args = ""
-    #     lm = lm_eval.models.get_model(model).create_from_arg_string(
-    #         model_args, {"batch_size": batch_size, "max_batch_size": max_batch_size, "device": device}
-    #     )
-    # else:
-    #     assert isinstance(model, lm_eval.base.LM)
-    #     lm = model
-
-    # if not no_cache:
-    #     lm = lm_eval.base.CachingLM(
-    #         lm,
-    #         "lm_cache/"
-    #         + (model if isinstance(model, str) else model.model.config._name_or_path)
-    #         + "_"
-    #         + model_args.replace("=", "-").replace(",", "_").replace("/", "-")
-    #         + ".db",
-    #     )
-
-    lm = GPT(GPTConfig())
->>>>>>> ec543137b50c0082301468c588a2198fc0a528ef
 
     task_dict = lm_eval.tasks.get_task_dict(tasks)
 
@@ -315,10 +284,7 @@ def evaluate(
         #       solution. we could also implement some kind of auto-grouping here;
         #       they should end up next to each other.
 
-<<<<<<< HEAD
         print("Running", reqtype, "requests")
-=======
->>>>>>> ec543137b50c0082301468c588a2198fc0a528ef
         resps = getattr(lm, reqtype)([req.args for req in reqs])
         resps = [
             x if req.index is None else x[req.index] for x, req in zip(resps, reqs)
