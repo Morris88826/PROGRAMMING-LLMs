@@ -2,11 +2,16 @@ import argparse
 import json
 import logging
 import os
+<<<<<<< HEAD
 import sys
 sys.path.append('..')
 from libs.model import GPT, GPTConfig
 from lm_eval import tasks, evaluator, utils
 from transformers import AutoModelForCausalLM, AutoConfig
+=======
+
+from lm_eval import tasks, evaluator, utils
+>>>>>>> ec543137b50c0082301468c588a2198fc0a528ef
 
 logging.getLogger("openai").setLevel(logging.WARNING)
 
@@ -40,10 +45,13 @@ def parse_args():
 def main():
     args = parse_args()
 
+<<<<<<< HEAD
     AutoConfig.register("custom-gpt2", GPTConfig)
     AutoModelForCausalLM.register(GPTConfig, GPT)
 
 
+=======
+>>>>>>> ec543137b50c0082301468c588a2198fc0a528ef
     assert not args.provide_description  # not implemented
 
     if args.limit:
