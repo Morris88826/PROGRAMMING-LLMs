@@ -1,14 +1,9 @@
 # config.yaml
-name: gpt2-350M-ori  # name of the experiment
+name: best  # name of the experiment
 
 # File system input/output settings
-<<<<<<< HEAD
 input_bin: "./dev/data/fineweb10B/fineweb_train_*.bin"
 input_val_bin: "./dev/data/fineweb10B/fineweb_val_*.bin"
-=======
-input_bin: "data/fineweb10B/fineweb_train_*.bin"
-input_val_bin: "data/fineweb10B/fineweb_val_*.bin"
->>>>>>> ec543137b50c0082301468c588a2198fc0a528ef
 output_dir: "./results"  # directory to save the model
 
 # Model configuration
