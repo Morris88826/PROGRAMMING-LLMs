@@ -2,3 +2,5 @@ __pycache__
 data
 results
 hf_models
+
+lm-evaluation-harness

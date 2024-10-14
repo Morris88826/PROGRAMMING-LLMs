@@ -10,6 +10,7 @@ from transformers import AutoModelForCausalLM, AutoConfig, GPT2Tokenizer, AutoTo
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("-c", "--config", type=str, default=None, help="the path to the model config")
+    parser.add_argument("--publish", action="store_true", help="publish the model to huggingface")
     args = parser.parse_args()
 
     with open(args.config, "r") as f:
@@ -44,10 +45,17 @@ if __name__ == "__main__":
 
     tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
 
-    # Save the model to a directory
-    gpt_config.save_pretrained(f'./hf_models/{config["name"]}')
-    model.save_pretrained(f'./hf_models/{config["name"]}', safe_serialization=False)
-    tokenizer.save_pretrained(f'./hf_models/{config["name"]}')
+    # # Save the model to a directory
+    # gpt_config.save_pretrained(f'./hf_models/{config["name"]}')
+    # model.save_pretrained(f'./hf_models/{config["name"]}', safe_serialization=False)
+    # tokenizer.save_pretrained(f'./hf_models/{config["name"]}')
+
+    if args.publish:
+        print(f"Pushing model to huggingface")
+        model_card = "Morris88826/Mu-Ruei_Tseng_133007868_350M"
+        gpt_config.push_to_hub(model_card)
+        model.push_to_hub(model_card, safe_serialization=False)
+        tokenizer.push_to_hub(model_card)
 
     # Register the custom model and config type
     AutoConfig.register("custom-gpt2", GPTConfig)
@@ -59,4 +67,6 @@ if __name__ == "__main__":
     model = AutoModelForCausalLM.from_pretrained(f'./hf_models/{config["name"]}')
 
     print(f"Model saved to ./hf_models/{config['name']}")
+
+
 
