@@ -274,7 +274,7 @@ class Block(nn.Module):
 # norm_method="layernorm", act_method="gelu", use_RoPE=False, use_FLASH=False, group_size=1
 class GPT(PreTrainedModel):
     config_class = GPTConfig
-    _no_split_modules = ["transformer.wte", "transformer.wpe", "transformer.h", "transformer.ln_f"]
+    _no_split_modules = ["transformer.wte", "transformer.wpe", "transformer.h", "transformer.ln_f", "Block"]
     def __init__(self, config: GPTConfig, use_FLASH=False):
         super().__init__(config)
         self.config = config

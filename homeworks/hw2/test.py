@@ -135,26 +135,25 @@ def evaluate(args):
 
     if model_type == "gpt2":
         model = GPT2LMHeadModel.from_pretrained(model_type)
+    elif args.huggingface:
+        AutoConfig.register("custom-gpt2", GPTConfig)
+        AutoModelForCausalLM.register(GPTConfig, GPT)
+        model = AutoModelForCausalLM.from_pretrained(f'./hf_models/{config["name"]}')
     elif model_type in ["d12","d24"] and ckpt_path:
-        if args.huggingface:
-            AutoConfig.register("custom-gpt2", GPTConfig)
-            AutoModelForCausalLM.register(GPTConfig, GPT)
-            model = AutoModelForCausalLM.from_pretrained(f'./hf_models/{config["name"]}')
-        else:
-            gpt_config = {
-                "d12": GPTConfig(block_size=1024, vocab_size=50257, n_layer=12, n_head=12, n_embd=768, norm_method=config["norm_method"], act_method=config["act_method"], RoPE=config["use_RoPE"], group_size=config["group_size"]),
-                "d24": GPTConfig(block_size=1024, vocab_size=50257, n_layer=24, n_head=16, n_embd=1024, norm_method=config["norm_method"], act_method=config["act_method"], RoPE=config["use_RoPE"], group_size=config["group_size"]),
-                "d36": GPTConfig(block_size=1024, vocab_size=50257, n_layer=36, n_head=20, n_embd=1280, norm_method=config["norm_method"], act_method=config["act_method"], RoPE=config["use_RoPE"], group_size=config["group_size"]),
-                "d48": GPTConfig(block_size=1024, vocab_size=50257, n_layer=48, n_head=25, n_embd=1600, norm_method=config["norm_method"], act_method=config["act_method"], RoPE=config["use_RoPE"], group_size=config["group_size"]),
-            }[config["model"]]
-            model = GPT(gpt_config, use_FLASH=config["flash"])
+        gpt_config = {
+            "d12": GPTConfig(block_size=1024, vocab_size=50257, n_layer=12, n_head=12, n_embd=768, norm_method=config["norm_method"], act_method=config["act_method"], RoPE=config["use_RoPE"], group_size=config["group_size"]),
+            "d24": GPTConfig(block_size=1024, vocab_size=50257, n_layer=24, n_head=16, n_embd=1024, norm_method=config["norm_method"], act_method=config["act_method"], RoPE=config["use_RoPE"], group_size=config["group_size"]),
+            "d36": GPTConfig(block_size=1024, vocab_size=50257, n_layer=36, n_head=20, n_embd=1280, norm_method=config["norm_method"], act_method=config["act_method"], RoPE=config["use_RoPE"], group_size=config["group_size"]),
+            "d48": GPTConfig(block_size=1024, vocab_size=50257, n_layer=48, n_head=25, n_embd=1600, norm_method=config["norm_method"], act_method=config["act_method"], RoPE=config["use_RoPE"], group_size=config["group_size"]),
+        }[config["model"]]
+        model = GPT(gpt_config, use_FLASH=config["flash"])
 
-            # since model is compiled, we need to load the state dict into the model
-            try:
-                model.load_state_dict(torch.load(ckpt_path))
-            except:
-                new_state_dict = remove_prefix_from_state_dict(torch.load(ckpt_path), prefix="_orig_mod.")
-                model.load_state_dict(new_state_dict)
+        # since model is compiled, we need to load the state dict into the model
+        try:
+            model.load_state_dict(torch.load(ckpt_path))
+        except:
+            new_state_dict = remove_prefix_from_state_dict(torch.load(ckpt_path), prefix="_orig_mod.")
+            model.load_state_dict(new_state_dict)
     else:
         raise ValueError(f"unknown model type {model_type}")
     
