@@ -27,7 +27,6 @@ def invoke_llm(prompt:str) -> str:
         output = response.choices[0].message.content
     except Exception as e:
         output = f"Exception: {e}"
-
     return output
 
 EMAIL_DB="""
