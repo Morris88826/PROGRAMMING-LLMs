@@ -7,7 +7,7 @@ from langchain.schema import Document  # Importing Document schema from Langchai
 from chromadb.config import Settings
 
 # Directory to your pdf files:
-DATA_PATH = r"papers"
+DATA_PATH = r"private/docs"
 
 def load_documents():
     """
@@ -19,8 +19,7 @@ def load_documents():
     document_loader = PyPDFDirectoryLoader(DATA_PATH)  # Initialize PDF loader with specified directory
     return document_loader.load()  # Load PDF documents and return them as a list of Document objects
 
-# documents = load_documents()
-
+documents = load_documents()
 
 def split_text(documents: list[Document]):
     """
@@ -62,7 +61,7 @@ def split_text(documents: list[Document]):
 from chromadb.config import DEFAULT_TENANT, DEFAULT_DATABASE, Settings
 
 client = chromadb.PersistentClient(
-    path="chromadb",
+    path="./chromadb",
     settings=Settings(),
     tenant=DEFAULT_TENANT,
     database=DEFAULT_DATABASE,
@@ -89,7 +88,7 @@ except Exception as e:
     for i, chunk in enumerate(chunks):
       d = chunk.page_content
       print(f"Chunk {i}: {d}")
-      response = ollama.embeddings(model="llama3.1", prompt=d)
+      response = ollama.embeddings(model="llama3.2", prompt=d)
       embedding = response["embedding"]
       # print(f"embedding: {embedding}")
       collection.add(
@@ -99,14 +98,14 @@ except Exception as e:
       )
 
 # an example prompt
-prompt = "How does chain of thought prompting work?"
+prompt = "What is the person's name in the document?"
 
 # prompt = "What's the score of llama 3 8B on MATH (0-shot, CoT)?"
 
 # generate an embedding for the prompt and retrieve the most relevant doc
 embedding = ollama.embeddings(
   prompt=prompt,
-  model="llama3.1"
+  model="llama3.2"
 )["embedding"]
 # print(f"embedding: length {len(embedding)})\n{embedding}")
 
@@ -114,6 +113,8 @@ results = collection.query(
   query_embeddings=[embedding],
   n_results=5
 )
+
+print(f"results:\n{results}")
 
 # print(f"results:\n{results}")
 
@@ -134,7 +135,7 @@ print(f"prompt: {prompt}")
 
 # generate a response combining the prompt and data we retrieved in step 2
 output = ollama.generate(
-  model="llama3.1",
+  model="llama3.2",
   prompt=prompt
 )
 

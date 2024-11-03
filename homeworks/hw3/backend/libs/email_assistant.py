@@ -34,18 +34,20 @@ def send_email(to_addr: str, subject: str, body: str):
 if __name__ == "__main__":
     print(f"I'm your email assistant, Monica.")
     load_dotenv()
-    api_key = os.getenv("OPENAI_API_KEY")
-    llm = LLM(api_key)
 
-    while True:
-        try:
-            # user_input = input("Please enter a new task: ")
-            user_input = "can you help me send an email?"
-            tic = time.time()
-            print(llm.invoke_global_llm(user_input))
-            raise NotImplementedError("Please implement the email assistant.")
-            latency = time.time() - tic
-            print(f"\nLatency: {latency:.3f}s")
-        except KeyboardInterrupt:
-                print("\nExiting.\n")
-                break
+    send_email("morris88826@gmail.com", "Hello", "Hello, this is a test email")
+    # api_key = os.getenv("OPENAI_API_KEY")
+    # llm = LLM(api_key)
+
+    # while True:
+    #     try:
+    #         # user_input = input("Please enter a new task: ")
+    #         user_input = "can you help me send an email?"
+    #         tic = time.time()
+    #         print(llm.invoke_global_llm(user_input))
+    #         raise NotImplementedError("Please implement the email assistant.")
+    #         latency = time.time() - tic
+    #         print(f"\nLatency: {latency:.3f}s")
+    #     except KeyboardInterrupt:
+    #             print("\nExiting.\n")
+    #             break
