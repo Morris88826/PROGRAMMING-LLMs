@@ -1,4 +1,4 @@
-# Personal AI Assistant App
+# Personal AI Assistant
 
 ## Overview
 This project is a React Native-based mobile application designed to enhance user experience by providing an intuitive interface for managing personal data and interacting with an AI assistant. The app features two main sections:
@@ -26,7 +26,8 @@ Before running the project, ensure you have the following:
      - **Google Calendar API**
      - **Custom Search API**
    - **Create** an API key and **OAuth Client ID** and complete the setup on the OAuth consent screen.
-
+   
+   After the setup, download the credentials.json and save it in the `backend/private` folder.
 3. **Expo Setup**:
    - Install Expo CLI by running:
      ```bash
@@ -37,16 +38,22 @@ Before running the project, ensure you have the following:
 ## Getting Started
 
 ### Backend Setup
-1. Navigate to the `backend` folder:
+1. Setup the python environment:
+   ```bash
+   conda create -n llm python=3.11
+   conda activate llm
+   pip install -r requirements.txt
+   ```
+2. Navigate to the `backend` folder:
    ```bash
    cd backend
-2. Create a `.env` file with the following content:
+3. Create a `.env` file with the following content:
     ```bash
     OPENAI_API_KEY=your_openai_api_key
     GOOGLE_CSE_ID=your_google_cse_id
     GOOGLE_API_KEY=your_google_api_key
     ```
-3. Run the server:
+4. Run the server:
     ```bash
     python app.py
     ```
