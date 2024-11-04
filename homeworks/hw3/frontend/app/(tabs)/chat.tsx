@@ -84,7 +84,7 @@ export default function ChatScreen() {
             )
           );
         } else {
-          apiMessage = data.response.text;
+          apiMessage = data.response;
           setMessages((prevMessages) =>
             prevMessages.map((msg) =>
               msg.id === messageId ? { ...msg, text: apiMessage } : msg
