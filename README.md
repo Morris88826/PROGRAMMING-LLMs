@@ -13,3 +13,10 @@ This is the repository for the course CSCE 689 - Special Topics in Programming L
 
 ## Papers
 * Scaling Rectified Flow Transformers for High-Resolution Image Synthesis ([here](https://github.com/Morris88826/CSCE-689-PROGRAMMING-LLMs/blob/main/papers/research%20presentation/Rectified%20Flow%20(Stable%20Diffusion).pdf))
+
+## Useful Links
+* Tokenizer Playground: [here](https://huggingface.co/spaces/Xenova/the-tokenizer-playground)
+* Local llama-3.1 model: [here](https://github.com/ollama/ollama)
+* Quantization: [here](https://github.com/ggerganov/llama.cpp/blob/master/examples/quantize/README.md)
+* Evaluation with perplexity: [here](https://github.com/ggerganov/llama.cpp/blob/master/examples/perplexity/README.md)
+* GGUF: [here](https://github.com/ggerganov/ggml/blob/master/docs/gguf.md)
