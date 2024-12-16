@@ -9,4 +9,4 @@
 * YouClipAI: Automating YouTube Video Data Collection with Large Language Models ([here](https://github.com/Morris88826/YouClipAI))
 
 ## Papers
-* Scaling Rectified Flow Transformers for High-Resolution Image Synthesis ([here](https://github.com/Morris88826/CSCE-689-PROGRAMMING-LLMs/blob/main/papers/research%20presentation/Rectified%20Flow%20(Stable%20Diffusion).pdf)]
+* Scaling Rectified Flow Transformers for High-Resolution Image Synthesis ([here](https://github.com/Morris88826/CSCE-689-PROGRAMMING-LLMs/blob/main/papers/research%20presentation/Rectified%20Flow%20(Stable%20Diffusion).pdf)])
