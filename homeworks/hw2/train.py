@@ -125,7 +125,7 @@ if __name__ == "__main__":
                 val_loss_accum = 0.0
                 for _ in range(config["val_max_steps"]):
                     x, y = val_loader.next_batch()
-                    x, y = x.to(device), y.to(device)
+                    x, y = x.to(device), y.to(device) # x.shape = (B, T)
                     with torch.autocast(device_type=device_type, dtype=ptdtype):
                         out = model(x, y)
                         logits = out["logits"]
